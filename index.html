@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Finanza</title>
+  <meta name="description" content="Control de finanzas personales: ingresos, gastos y presupuestos.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Finanza">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Iconos SVG reutilizables -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></g></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <div class="app">
+    <!-- Navegación: barra inferior en móvil, lateral en escritorio -->
+    <nav class="nav" aria-label="Navegación">
+      <div class="nav-brand">
+        <img src="icons/icon.svg" alt="" width="34" height="34">
+        <span>Finanza</span>
+      </div>
+      <button data-view="resumen" class="active"><svg><use href="#i-home"/></svg><span>Resumen</span></button>
+      <button data-view="movimientos"><svg><use href="#i-list"/></svg><span>Movimientos</span></button>
+      <button data-view="presupuestos"><svg><use href="#i-target"/></svg><span>Presupuestos</span></button>
+      <button data-view="ajustes"><svg><use href="#i-gear"/></svg><span>Ajustes</span></button>
+    </nav>
+
+    <div class="content">
+      <header class="topbar">
+        <div class="title-block">
+          <span class="eyebrow">Finanza</span>
+          <h1 id="pageTitle">Resumen</h1>
+        </div>
+        <div class="month-nav" role="group" aria-label="Mes">
+          <button id="prevMonth" class="icon-btn" aria-label="Mes anterior"><svg><use href="#i-left"/></svg></button>
+          <span id="monthLabel" class="month-label"></span>
+          <button id="nextMonth" class="icon-btn" aria-label="Mes siguiente"><svg><use href="#i-right"/></svg></button>
+        </div>
+      </header>
+
+      <main>
+        <!-- RESUMEN -->
+        <section id="view-resumen" class="view active" aria-label="Resumen">
+          <div class="hero-card">
+            <div class="hero-top">
+              <span>Saldo total</span>
+              <span id="heroMonth" class="hero-chip"></span>
+            </div>
+            <div id="statTotal" class="hero-value"></div>
+            <div class="hero-pills">
+              <div class="pill">
+                <span class="pill-ico in"><svg><use href="#i-down"/></svg></span>
+                <div><small>Ingresos</small><b id="statIncome"></b></div>
+              </div>
+              <div class="pill">
+                <span class="pill-ico out"><svg><use href="#i-up"/></svg></span>
+                <div><small>Gastos</small><b id="statExpense"></b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-label">Balance del mes</span>
+              <span id="statBalance" class="balance-value"></span>
+            </div>
+            <div class="card">
+              <div class="rate-head">
+                <span class="card-label">Tasa de ahorro</span>
+                <span id="statRate" class="rate-value"></span>
+              </div>
+              <div class="rate-track"><span id="rateBar"></span></div>
+              <span id="rateHint" class="hint"></span>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h2>Gastos por categoría</h2>
+              <div id="categoryChart" class="hbar-chart"></div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h2>Últimos 6 meses</h2>
+                <div class="legend" aria-hidden="true">
+                  <span><i class="swatch s-income"></i>Ingresos</span>
+                  <span><i class="swatch s-expense"></i>Gastos</span>
+                </div>
+              </div>
+              <div id="trendChart" class="vbar-chart"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Últimos movimientos</h2>
+              <button class="link-btn" data-goto="movimientos">Ver todos →</button>
+            </div>
+            <ul id="recentList" class="tx-list"></ul>
+          </div>
+        </section>
+
+        <!-- MOVIMIENTOS -->
+        <section id="view-movimientos" class="view" aria-label="Movimientos">
+          <div class="filters">
+            <label class="search">
+              <svg><use href="#i-search"/></svg>
+              <input id="searchInput" type="search" placeholder="Buscar nota o categoría…" aria-label="Buscar">
+            </label>
+            <select id="typeFilter" aria-label="Filtrar por tipo">
+              <option value="all">Todos</option>
+              <option value="expense">Gastos</option>
+              <option value="income">Ingresos</option>
+            </select>
+          </div>
+          <div id="txGroups" class="tx-groups"></div>
+        </section>
+
+        <!-- PRESUPUESTOS -->
+        <section id="view-presupuestos" class="view" aria-label="Presupuestos">
+          <div class="card intro">
+            <span class="intro-ico">🎯</span>
+            <div>
+              <h2>Presupuesto mensual por categoría</h2>
+              <p class="muted">Define cuánto quieres gastar al mes en cada categoría. Déjalo vacío para no tener límite.</p>
+            </div>
+          </div>
+          <div class="card">
+            <div id="budgetList" class="budget-list"></div>
+          </div>
+        </section>
+
+        <!-- AJUSTES -->
+        <section id="view-ajustes" class="view" aria-label="Ajustes">
+          <div class="card highlight" id="installCard" hidden>
+            <div>
+              <h2>Instalar como app</h2>
+              <p class="muted">Agrega Finanza a tu pantalla de inicio y úsala como una app, incluso sin internet.</p>
+            </div>
+            <button id="installBtn" class="btn primary">Instalar</button>
+          </div>
+
+          <!-- Sincronización en la nube -->
+          <div class="card" id="syncCard">
+            <div class="card-head">
+              <h2>☁️ Sincronización</h2>
+              <span id="syncBadge" class="sync-badge" data-state="off">Desactivada</span>
+            </div>
+
+            <div id="syncOff">
+              <p class="muted">Aún no está configurada: tus datos quedan solo en este dispositivo. Para sincronizar el celular y el PC, sigue la guía <b>docs/SINCRONIZACION.md</b> (gratis, unos 10 minutos).</p>
+            </div>
+
+            <form id="authForm" hidden>
+              <p class="muted">Inicia sesión con la misma cuenta en todos tus dispositivos y tus datos se mantendrán iguales en todos.</p>
+              <div class="grid-2 tight">
+                <label class="field"><span>Correo</span><input id="authEmail" type="email" autocomplete="email" required></label>
+                <label class="field"><span>Contraseña</span><input id="authPassword" type="password" autocomplete="current-password" minlength="6" required></label>
+              </div>
+              <div class="btn-row" style="margin-top:0">
+                <button type="submit" class="btn primary" data-auth="signin">Iniciar sesión</button>
+                <button type="submit" class="btn" data-auth="signup">Crear cuenta</button>
+              </div>
+            </form>
+
+            <div id="syncOn" hidden>
+              <p class="muted">Conectado como <b id="syncEmail"></b></p>
+              <p class="hint" id="syncDetail"></p>
+              <div class="btn-row">
+                <button id="syncNowBtn" class="btn primary">Sincronizar ahora</button>
+                <button id="signOutBtn" class="btn">Cerrar sesión</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Preferencias</h2>
+            <div class="grid-2 tight">
+              <label class="field">
+                <span>Moneda</span>
+                <select id="currencySelect">
+                  <option value="COP">Peso colombiano (COP)</option>
+                  <option value="MXN">Peso mexicano (MXN)</option>
+                  <option value="PEN">Sol peruano (PEN)</option>
+                  <option value="CLP">Peso chileno (CLP)</option>
+                  <option value="ARS">Peso argentino (ARS)</option>
+                  <option value="USD">Dólar (USD)</option>
+                  <option value="EUR">Euro (EUR)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Tema</span>
+                <select id="themeSelect">
+                  <option value="auto">Automático</option>
+                  <option value="light">Claro</option>
+                  <option value="dark">Oscuro</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Categorías</h2>
+            <div id="categoryAdmin" class="chips"></div>
+            <form id="categoryForm" class="inline-form">
+              <input id="newCatName" placeholder="Nueva categoría" required maxlength="30" aria-label="Nombre de la categoría">
+              <select id="newCatType" aria-label="Tipo de categoría">
+                <option value="expense">Gasto</option>
+                <option value="income">Ingreso</option>
+              </select>
+              <button class="btn primary" type="submit">Agregar</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h2>📥 Importar desde Excel</h2>
+            <p class="muted">Carga muchos movimientos de una vez desde un archivo CSV. Las filas con errores no se importan y te decimos exactamente cuál falló y por qué.</p>
+            <details class="help">
+              <summary>¿Cómo debe ser el archivo?</summary>
+              <p>La <b>primera fila</b> debe tener estos títulos (sin importar mayúsculas ni tildes):</p>
+              <div class="table-wrap">
+                <table class="spec">
+                  <thead><tr><th>Columna</th><th>¿Obligatoria?</th><th>Ejemplo</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>Fecha</b></td><td>Sí</td><td>05/11/2026 o 2026-11-05</td></tr>
+                    <tr><td><b>Tipo</b></td><td>Sí</td><td>Gasto o Ingreso</td></tr>
+                    <tr><td><b>Categoría</b></td><td>Sí</td><td>Comida (si no existe, se crea)</td></tr>
+                    <tr><td><b>Monto</b></td><td>Sí</td><td>45000, 45.000 o 45.000,50</td></tr>
+                    <tr><td><b>Nota</b></td><td>No</td><td>Mercado de la semana</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>En Excel: <i>Archivo → Guardar como → CSV UTF-8 (delimitado por comas)</i>. Lo más fácil es descargar la plantilla y llenarla.</p>
+            </details>
+            <div class="btn-row">
+              <button id="templateBtn" class="btn">Descargar plantilla</button>
+              <label class="btn primary">Importar CSV<input id="importCsvInput" type="file" accept=".csv,text/csv" hidden></label>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Tus datos</h2>
+            <p class="muted">🔒 Sin sincronización, todo se guarda solo en este dispositivo. Exporta un respaldo de vez en cuando.</p>
+            <div class="btn-row">
+              <button id="exportBtn" class="btn">Exportar respaldo</button>
+              <button id="exportCsvBtn" class="btn">Exportar a Excel</button>
+              <label class="btn">Restaurar respaldo<input id="importInput" type="file" accept="application/json,.json" hidden></label>
+              <button id="wipeBtn" class="btn danger">Borrar todo</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Usar en el celular</h2>
+            <ul class="steps">
+              <li><b>Android (Chrome):</b> menú ⋮ → <i>Instalar app</i> o <i>Agregar a pantalla principal</i>.</li>
+              <li><b>iPhone (Safari):</b> botón Compartir <span aria-hidden="true">⬆︎</span> → <i>Agregar a pantalla de inicio</i>.</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <button id="fab" class="fab" aria-label="Agregar movimiento"><svg><use href="#i-plus"/></svg><span>Nuevo</span></button>
+
+  <!-- Formulario de movimiento -->
+  <dialog id="txDialog">
+    <form id="txForm">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <h2 id="txDialogTitle">Nuevo movimiento</h2>
+      <div class="segmented" role="radiogroup" aria-label="Tipo">
+        <label><input type="radio" name="type" value="expense" checked><span>Gasto</span></label>
+        <label><input type="radio" name="type" value="income"><span>Ingreso</span></label>
+      </div>
+      <label class="amount-field">
+        <span class="sr-only">Monto</span>
+        <span class="amount-prefix">$</span>
+        <input id="txAmount" name="amount" type="text" inputmode="decimal" placeholder="0" required autocomplete="off">
+      </label>
+      <div class="grid-2 tight">
+        <label class="field">
+          <span>Categoría</span>
+          <select id="txCategory" name="categoryId" required></select>
+        </label>
+        <label class="field">
+          <span>Fecha</span>
+          <input id="txDate" name="date" type="date" required>
+        </label>
+      </div>
+      <label class="field">
+        <span>Nota (opcional)</span>
+        <input id="txNote" name="note" type="text" maxlength="80" placeholder="Ej: almuerzo con amigos">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="txDelete" class="btn danger" hidden>Eliminar</button>
+        <span class="spacer"></span>
+        <button type="button" id="txCancel" class="btn">Cancelar</button>
+        <button type="submit" class="btn primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Resultado de una importación -->
+  <dialog id="importDialog">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <h2 id="importTitle">Resultado de la importación</h2>
+    <div id="importBody" class="import-body"></div>
+    <div class="dialog-actions">
+      <button type="button" id="importUndo" class="btn danger" hidden>Deshacer importación</button>
+      <span class="spacer"></span>
+      <button type="button" id="importClose" class="btn primary">Entendido</button>
+    </div>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
