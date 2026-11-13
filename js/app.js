@@ -60,7 +60,7 @@ function applyTheme() {
 // ===== Render principal =====
 function render() {
   setCurrency(data.settings.currency);
-  $('#monthLabel').textContent = monthName(currentMonth);
+  $('#monthText').textContent = monthName(currentMonth);
   $('.amount-prefix').textContent = data.settings.currency === 'EUR' ? '€' : '$';
   renderSummary();
   renderTransactions();
@@ -359,6 +359,7 @@ function showView(name) {
   document.querySelectorAll('.nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   $('#pageTitle').textContent = TITLES[name];
   $('.month-nav').style.visibility = name === 'ajustes' ? 'hidden' : '';
+  closePicker();
   $('#fab').hidden = name === 'ajustes';
   $('#fab').setAttribute('aria-label', name === 'recordatorios' ? 'Agregar recordatorio' : 'Agregar movimiento');
   window.scrollTo({ top: 0 });
@@ -369,6 +370,93 @@ document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('clic
 
 $('#prevMonth').addEventListener('click', () => { currentMonth = shiftMonth(currentMonth, -1); render(); });
 $('#nextMonth').addEventListener('click', () => { currentMonth = shiftMonth(currentMonth, 1); render(); });
+
+// ===== Selector rápido de fecha (flechita junto al mes) =====
+const picker = $('#datePicker');
+const pad2 = (n) => String(n).padStart(2, '0');
+let dp = { y: 0, m: 0 }; // año y mes (1-12) que muestra el selector
+
+function openPicker() {
+  const [y, m] = currentMonth.split('-').map(Number);
+  dp = { y, m };
+  picker.hidden = false;
+  $('#monthLabel').setAttribute('aria-expanded', 'true');
+  renderPicker();
+}
+
+function closePicker() {
+  if (picker.hidden) return;
+  picker.hidden = true;
+  $('#monthLabel').setAttribute('aria-expanded', 'false');
+}
+
+function renderPicker() {
+  const today = todayISO();
+  const nowKey = monthKeyOf(today);
+  $('#dpYear').textContent = dp.y;
+  $('#dpMonths').innerHTML = Array.from({ length: 12 }, (_, i) => {
+    const key = `${dp.y}-${pad2(i + 1)}`;
+    const cls = ['dp-month'];
+    if (key === currentMonth) cls.push('active');
+    if (key === nowKey) cls.push('now');
+    return `<button type="button" class="${cls.join(' ')}" data-dp-month="${i + 1}">${esc(monthName(key, 'short'))}</button>`;
+  }).join('');
+
+  // Días del mes elegido; los que tienen pagos pendientes llevan un punto.
+  const pending = new Set(store.alive(data.reminders).filter((r) => !r.paid).map((r) => r.date));
+  const offset = (new Date(dp.y, dp.m - 1, 1).getDay() + 6) % 7;
+  const total = new Date(dp.y, dp.m, 0).getDate();
+  let html = '<span></span>'.repeat(offset);
+  for (let d = 1; d <= total; d++) {
+    const iso = `${dp.y}-${pad2(dp.m)}-${pad2(d)}`;
+    const cls = ['dp-day'];
+    if (iso === today) cls.push('today');
+    if (pending.has(iso)) cls.push('has');
+    html += `<button type="button" class="${cls.join(' ')}" data-dp-day="${iso}">${d}</button>`;
+  }
+  $('#dpDays').innerHTML = html;
+}
+
+$('#monthLabel').addEventListener('click', () => (picker.hidden ? openPicker() : closePicker()));
+
+picker.addEventListener('click', (e) => {
+  const yearBtn = e.target.closest('[data-dp-year]');
+  if (yearBtn) {
+    dp.y += Number(yearBtn.dataset.dpYear);
+    renderPicker();
+    return;
+  }
+  const monthBtn = e.target.closest('[data-dp-month]');
+  if (monthBtn) {
+    dp.m = Number(monthBtn.dataset.dpMonth);
+    currentMonth = `${dp.y}-${pad2(dp.m)}`;
+    render();
+    renderPicker(); // sigue abierto para poder elegir el día
+    return;
+  }
+  const dayBtn = e.target.closest('[data-dp-day]');
+  if (dayBtn) {
+    const iso = dayBtn.dataset.dpDay;
+    currentMonth = monthKeyOf(iso);
+    closePicker();
+    render();
+    if (currentView === 'recordatorios') openDay(iso);
+  }
+});
+
+$('#dpToday').addEventListener('click', () => {
+  currentMonth = monthKeyOf(todayISO());
+  closePicker();
+  render();
+});
+
+// Se cierra al tocar fuera o con Escape.
+document.addEventListener('pointerdown', (e) => {
+  if (!picker.hidden && !picker.contains(e.target) && !$('#monthLabel').contains(e.target)) closePicker();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !picker.hidden) { closePicker(); $('#monthLabel').focus(); }
+});
 
 $('#searchInput').addEventListener('input', renderTransactions);
 $('#typeFilter').addEventListener('change', renderTransactions);
