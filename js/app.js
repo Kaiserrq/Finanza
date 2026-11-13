@@ -681,7 +681,7 @@ setInterval(() => {
   // Si pasó la medianoche con la app abierta, se actualizan los "faltan X días".
   if (renderedDay !== todayISO()) { render(); checkLocalAlerts(); }
 }, 60_000);
-setInterval(checkLocalAlerts, 30 * 60_000);
+setInterval(() => checkLocalAlerts(), 30 * 60_000);
 
 // ===== Recordatorios de pago (calendario) =====
 let renderedDay = null;
@@ -851,6 +851,8 @@ $('#remForm').addEventListener('submit', (e) => {
   resetRemForm();
   // Buen momento para pedir permiso: la persona acaba de crear algo que necesita avisos.
   if (notify.permission() === 'default') enableNotifications();
+  // Si vence en los próximos 3 días, el aviso de hoy se muestra ya (el servidor solo envía a las 9:00).
+  else checkLocalAlerts({ force: true });
 });
 
 $('#remDelete').addEventListener('click', () => {
@@ -998,11 +1000,11 @@ async function ensurePush() {
 
 /** Muestra los avisos de hoy que aún no se han mostrado en este dispositivo. */
 let checking = false;
-async function checkLocalAlerts() {
+async function checkLocalAlerts({ force = false } = {}) {
   if (checking || notify.permission() !== 'granted') return;
   // Si el servidor envía los avisos a este dispositivo, se le da prioridad hasta una hora
   // después de la hora de envío, para no duplicarlos.
-  if (notify.pushEndpoint() && new Date().getHours() <= notify.SEND_HOUR) return;
+  if (!force && notify.pushEndpoint() && new Date().getHours() <= notify.SEND_HOUR) return;
   checking = true;
   try {
     const today = todayISO();
