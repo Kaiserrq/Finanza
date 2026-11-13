@@ -1,6 +1,6 @@
 // Service worker: guarda la app en caché para que funcione sin internet.
 // Cambia CACHE_VERSION cada vez que publiques cambios para forzar la actualización.
-const CACHE_VERSION = 'finanza-v10';
+const CACHE_VERSION = 'finanza-v11';
 // Registro de avisos ya mostrados (lo comparte con la app; no se borra al actualizar).
 const LOG_CACHE = 'finanza-notified';
 const ASSETS = [
@@ -22,7 +22,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((c) => c.addAll(ASSETS)));
+  event.waitUntil(caches.open(CACHE_VERSION).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -45,7 +45,8 @@ self.addEventListener('fetch', (event) => {
   if (!url.protocol.startsWith('http')) return;
 
   event.respondWith(
-    fetch(req)
+    // no-cache: siempre se pregunta a GitHub si hay versión nueva (evita mezclar archivos viejos y nuevos).
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
