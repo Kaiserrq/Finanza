@@ -60,7 +60,9 @@ function applyTheme() {
 // ===== Render principal =====
 function render() {
   setCurrency(data.settings.currency);
-  $('#monthText').textContent = monthName(currentMonth);
+  // En celulares angostos se muestra abreviado ("Nov 2026") para que quepa el título.
+  $('#monthLabel').innerHTML = `<span class="ml-long">${esc(monthName(currentMonth))}</span>`
+    + `<span class="ml-short">${esc(monthName(currentMonth, 'short'))} ${currentMonth.slice(0, 4)}</span>`;
   $('.amount-prefix').textContent = data.settings.currency === 'EUR' ? '€' : '$';
   renderSummary();
   renderTransactions();
@@ -380,14 +382,14 @@ function openPicker() {
   const [y, m] = currentMonth.split('-').map(Number);
   dp = { y, m };
   picker.hidden = false;
-  $('#monthLabel').setAttribute('aria-expanded', 'true');
+  $('#pickerBtn').setAttribute('aria-expanded', 'true');
   renderPicker();
 }
 
 function closePicker() {
   if (picker.hidden) return;
   picker.hidden = true;
-  $('#monthLabel').setAttribute('aria-expanded', 'false');
+  $('#pickerBtn').setAttribute('aria-expanded', 'false');
 }
 
 function renderPicker() {
@@ -417,7 +419,7 @@ function renderPicker() {
   $('#dpDays').innerHTML = html;
 }
 
-$('#monthLabel').addEventListener('click', () => (picker.hidden ? openPicker() : closePicker()));
+$('#pickerBtn').addEventListener('click', () => (picker.hidden ? openPicker() : closePicker()));
 
 picker.addEventListener('click', (e) => {
   const yearBtn = e.target.closest('[data-dp-year]');
@@ -452,10 +454,10 @@ $('#dpToday').addEventListener('click', () => {
 
 // Se cierra al tocar fuera o con Escape.
 document.addEventListener('pointerdown', (e) => {
-  if (!picker.hidden && !picker.contains(e.target) && !$('#monthLabel').contains(e.target)) closePicker();
+  if (!picker.hidden && !picker.contains(e.target) && !$('#pickerBtn').contains(e.target)) closePicker();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !picker.hidden) { closePicker(); $('#monthLabel').focus(); }
+  if (e.key === 'Escape' && !picker.hidden) { closePicker(); $('#pickerBtn').focus(); }
 });
 
 $('#searchInput').addEventListener('input', renderTransactions);

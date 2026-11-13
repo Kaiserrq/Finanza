@@ -137,14 +137,10 @@ main { max-width: 1040px; margin: 0 auto; padding: 4px 16px 24px; }
   background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: var(--shadow-sm);
 }
 .month-nav { position: relative; }
-.month-label {
-  min-width: 118px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  border: 0; background: none; cursor: pointer; padding: 6px; border-radius: 999px;
-  font-weight: 700; font-size: .88rem; white-space: nowrap;
-}
-.month-label svg { width: 14px; height: 14px; color: var(--muted); transition: transform .2s; }
-.month-label:hover { background: var(--surface-2); }
-.month-label[aria-expanded="true"] svg { transform: rotate(180deg); color: var(--accent); }
+.month-label { min-width: 118px; text-align: center; font-weight: 700; font-size: .88rem; white-space: nowrap; }
+.picker-btn svg { transition: transform .2s; }
+.picker-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.picker-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
 .icon-btn {
   width: 32px; height: 32px; border-radius: 999px; border: 0; background: transparent;
   display: grid; place-items: center; cursor: pointer; color: var(--text-2);
@@ -152,7 +148,7 @@ main { max-width: 1040px; margin: 0 auto; padding: 4px 16px 24px; }
 .icon-btn svg { width: 18px; height: 18px; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 @media (max-width: 400px) {
-  .month-label { min-width: 92px; font-size: .8rem; padding: 6px 2px; }
+  .month-label { min-width: 92px; font-size: .8rem; }
   .topbar h1 { font-size: 1.3rem; }
 }
 
@@ -592,4 +588,19 @@ dialog .field input, dialog .field select { width: 100%; }
   width: 5px; height: 5px; border-radius: 50%; background: var(--warning);
 }
 .dp-foot { display: flex; justify-content: center; margin-top: 6px; }
-.month-label:focus-visible, .dp-month:focus-visible, .dp-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dp-month:focus-visible, .dp-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Mes abreviado en celulares angostos */
+.ml-short { display: none; }
+@media (max-width: 480px) {
+  .ml-long { display: none; }
+  .ml-short { display: inline; }
+  .month-label { min-width: 70px; }
+}
+@media (max-width: 400px) {
+  .topbar h1 { font-size: 1.2rem; }
+  .month-nav .icon-btn { width: 30px; height: 30px; }
+}
+@media (max-width: 340px) {
+  .topbar h1 { font-size: 1.05rem; }
+}
