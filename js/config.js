@@ -19,4 +19,4 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_1LX4T9Zmpmxx3-1t-Y_5Nw_NIhUQHOo
 // ============================================================
 // Llave PÚBLICA VAPID (la privada va solo en los secretos de Supabase).
 // Si la dejas vacía, los avisos llegan solo cuando abres la app.
-export const VAPID_PUBLIC_KEY = '';
+export const VAPID_PUBLIC_KEY = 'BKQC78l4Ew8ieU-QPa_nfFs5TQOUvg-VAJhN0RT_UESlJOrhH6Quvu2YBncBZJS3cGqiuANUxOdjAcDFf5cmTlQ';

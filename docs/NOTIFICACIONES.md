@@ -38,7 +38,7 @@ Private Key:
 UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls
 ```
 
-Guárdalas. La **pública** va en la app; la **privada** solo en Supabase. **Nunca** pongas la privada en `config.js` ni en GitHub.
+Guárdalas. La **pública** va en **dos** lugares: en Supabase (paso 4) y en `config.js` (paso 6). La **privada** va **solo** en Supabase (paso 4). **Nunca** pongas la privada en `config.js` ni en GitHub.
 
 ## Paso 2: Crear la tabla de dispositivos (1 min)
 

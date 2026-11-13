@@ -1,6 +1,6 @@
 // Service worker: guarda la app en caché para que funcione sin internet.
 // Cambia CACHE_VERSION cada vez que publiques cambios para forzar la actualización.
-const CACHE_VERSION = 'finanza-v5';
+const CACHE_VERSION = 'finanza-v6';
 // Registro de avisos ya mostrados (lo comparte con la app; no se borra al actualizar).
 const LOG_CACHE = 'finanza-notified';
 const ASSETS = [
