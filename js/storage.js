@@ -32,6 +32,7 @@ export function emptyData() {
     categories: structuredClone(DEFAULT_CATEGORIES),
     transactions: [],
     budgets: {},
+    reminders: [],
   };
 }
 
@@ -103,6 +104,34 @@ export function normalize(input, report = { invalid: 0 }) {
     }
   }
 
+  // Recordatorios de pago (calendario).
+  const reminders = [];
+  if (Array.isArray(input.reminders)) {
+    for (const r of input.reminders) {
+      if (r && r.id && r.title && isISODate(r.date)) {
+        const day = Number(r.date.slice(8));
+        reminders.push({
+          id: String(r.id),
+          title: String(r.title).slice(0, 60),
+          amount: Number.isFinite(+r.amount) && +r.amount > 0 ? +r.amount : 0,
+          categoryId: String(r.categoryId ?? ''),
+          date: r.date,
+          note: r.note ? String(r.note).slice(0, 120) : '',
+          repeat: r.repeat === 'monthly' ? 'monthly' : 'none',
+          // Día del mes original, para que "cada mes" vuelva al 31 después de un mes de 30 días.
+          anchorDay: Math.min(31, Math.max(1, Math.round(+r.anchorDay) || day)),
+          paid: !!r.paid,
+          paidAt: +r.paidAt || 0,
+          txId: r.txId ? String(r.txId) : '',
+          nextId: r.nextId ? String(r.nextId) : '',
+          createdAt: +r.createdAt || 0,
+          updatedAt: +r.updatedAt || +r.createdAt || 0,
+          deleted: !!r.deleted,
+        });
+      } else report.invalid++;
+    }
+  }
+
   const budgets = {};
   if (input.budgets && typeof input.budgets === 'object') {
     for (const [k, v] of Object.entries(input.budgets)) {
@@ -119,7 +148,7 @@ export function normalize(input, report = { invalid: 0 }) {
     updatedAt: +s.updatedAt || 0,
   };
 
-  return { version: 2, settings, categories, transactions, budgets };
+  return { version: 2, settings, categories, transactions, budgets, reminders };
 }
 
 // Elige la versión más reciente; si empatan, una regla fija para que todos los dispositivos coincidan.
@@ -129,6 +158,8 @@ function newest(a, b) {
   if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
   return JSON.stringify(a) >= JSON.stringify(b) ? a : b;
 }
+
+const byId = (x, y) => (x.id < y.id ? -1 : 1);
 
 function mergeById(listA, listB) {
   const map = new Map();
@@ -147,8 +178,9 @@ export function merge(a, b) {
     version: 2,
     settings: newest(a.settings, b.settings),
     categories: mergeById(a.categories, b.categories),
-    transactions: mergeById(a.transactions, b.transactions).sort((x, y) => (x.id < y.id ? -1 : 1)),
+    transactions: mergeById(a.transactions, b.transactions).sort(byId),
     budgets,
+    reminders: mergeById(a.reminders, b.reminders).sort(byId),
   };
 }
 
@@ -156,8 +188,9 @@ export function merge(a, b) {
 export function sameData(a, b) {
   const canon = (d) => JSON.stringify({
     ...d,
-    categories: [...d.categories].sort((x, y) => (x.id < y.id ? -1 : 1)),
-    transactions: [...d.transactions].sort((x, y) => (x.id < y.id ? -1 : 1)),
+    categories: [...d.categories].sort(byId),
+    transactions: [...d.transactions].sort(byId),
+    reminders: [...d.reminders].sort(byId),
     budgets: Object.fromEntries(Object.entries(d.budgets).sort(([x], [y]) => (x < y ? -1 : 1))),
   });
   return canon(a) === canon(b);

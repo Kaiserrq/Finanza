@@ -83,3 +83,31 @@ export async function push(userId, payload) {
   const { error } = await c.from(TABLE).upsert({ user_id: userId, data: payload, updated_at: new Date().toISOString() });
   if (error) throw new Error(friendly(error));
 }
+
+// ---- Notificaciones push: un registro por dispositivo ----
+const PUSH_TABLE = 'push_subscriptions';
+
+/** Guarda la suscripción push de este dispositivo y su zona horaria (para avisar a las 9:00 locales). */
+export async function savePushSubscription(userId, sub, timezone) {
+  const c = await getClient();
+  const { error } = await c.from(PUSH_TABLE).upsert(
+    {
+      endpoint: sub.endpoint,
+      user_id: userId,
+      p256dh: sub.keys.p256dh,
+      auth: sub.keys.auth,
+      timezone,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'endpoint' }
+  );
+  if (error) {
+    const msg = friendly(error);
+    throw new Error(msg.startsWith('Falta crear la tabla') ? 'Falta crear la tabla de avisos: ejecuta supabase/notificaciones.sql en Supabase.' : msg);
+  }
+}
+
+export async function deletePushSubscription(endpoint) {
+  const c = await getClient();
+  await c?.from(PUSH_TABLE).delete().eq('endpoint', endpoint);
+}

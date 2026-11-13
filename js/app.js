@@ -1,6 +1,8 @@
 import * as store from './storage.js';
 import * as sync from './sync.js';
 import { analyzeCSV, buildTemplate } from './csv.js';
+import * as rem from './reminders.js';
+import * as notify from './notify.js';
 import {
   setCurrency, money, moneyCompact, parseAmount, todayISO, monthKeyOf, shiftMonth,
   monthName, dayLabel, esc, toast, initTooltips,
@@ -10,6 +12,7 @@ import {
 let data = store.load();
 let currentMonth = monthKeyOf(todayISO());
 let editingId = null;
+let currentView = 'resumen';
 const $ = (sel) => document.querySelector(sel);
 const now = () => Date.now();
 
@@ -17,6 +20,8 @@ const now = () => Date.now();
 const txs = () => store.alive(data.transactions);
 const cats = () => store.alive(data.categories);
 const budgetOf = (id) => data.budgets[id]?.amount || 0;
+const reminders = () => store.alive(data.reminders);
+const remById = (id) => reminders().find((r) => r.id === id);
 
 const catById = (id) =>
   data.categories.find((c) => c.id === id) || { id, name: 'Sin categoría', icon: '🏷️', type: 'expense' };
@@ -60,7 +65,9 @@ function render() {
   renderSummary();
   renderTransactions();
   renderBudgets();
+  renderReminders();
   renderSettings();
+  renderedDay = todayISO();
 }
 
 function signedClass(n) {
@@ -247,19 +254,24 @@ function fillCategoryOptions(type, selected) {
     .join('');
 }
 
-function openTxDialog(tx = null) {
+/** `prefill` rellena un movimiento nuevo (por ejemplo, al pagar un recordatorio). */
+function openTxDialog(tx = null, prefill = null) {
   editingId = tx?.id ?? null;
-  const type = tx?.type ?? 'expense';
+  payingId = null;
+  const src = tx ?? prefill;
+  const type = src?.type ?? 'expense';
   form.type.value = type;
   form.dataset.type = type;
-  fillCategoryOptions(type, tx?.categoryId);
-  $('#txAmount').value = tx ? String(tx.amount) : '';
+  fillCategoryOptions(type, src?.categoryId);
+  $('#txAmount').value = src?.amount ? String(src.amount) : '';
   // Por defecto: hoy si estás viendo el mes actual; si no, el día 1 del mes visible.
   const defDate = monthKeyOf(todayISO()) === currentMonth ? todayISO() : `${currentMonth}-01`;
-  $('#txDate').value = tx?.date ?? defDate;
-  $('#txNote').value = tx?.note ?? '';
+  $('#txDate').value = src?.date ?? defDate;
+  $('#txNote').value = src?.note ?? '';
   $('#txDialogTitle').textContent = tx ? 'Editar movimiento' : 'Nuevo movimiento';
   $('#txDelete').hidden = !tx;
+  $('#txPayHint').hidden = true;
+  $('#txSkip').hidden = true;
   dialog.showModal();
   setTimeout(() => $('#txAmount').focus(), 50);
 }
@@ -292,8 +304,12 @@ form.addEventListener('submit', (e) => {
     Object.assign(existing, tx);
     toast('Movimiento actualizado');
   } else {
-    data.transactions.push({ id: store.uid(), createdAt: now(), deleted: false, ...tx });
-    toast(tx.type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
+    const id = store.uid();
+    data.transactions.push({ id, createdAt: now(), deleted: false, ...tx });
+    if (payingId) {
+      markPaid(payingId, id);
+      toast('✅ Pago registrado y gasto guardado');
+    } else toast(tx.type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
   }
   currentMonth = monthKeyOf(tx.date);
   dialog.close();
@@ -301,6 +317,14 @@ form.addEventListener('submit', (e) => {
 });
 
 $('#txCancel').addEventListener('click', () => dialog.close());
+dialog.addEventListener('close', () => { payingId = null; });
+$('#txSkip').addEventListener('click', () => {
+  if (!payingId) return;
+  markPaid(payingId, '');
+  dialog.close();
+  toast('Marcado como pagado (sin registrar gasto)');
+  persist();
+});
 $('#txDelete').addEventListener('click', () => {
   const t = editingId && data.transactions.find((x) => x.id === editingId);
   if (!t || !confirm('¿Eliminar este movimiento?')) return;
@@ -310,7 +334,11 @@ $('#txDelete').addEventListener('click', () => {
   persist();
 });
 
-$('#fab').addEventListener('click', () => openTxDialog());
+$('#fab').addEventListener('click', () => {
+  if (currentView === 'recordatorios') {
+    openDay(monthKeyOf(todayISO()) === currentMonth ? todayISO() : `${currentMonth}-01`);
+  } else openTxDialog();
+});
 
 // Click / Enter sobre un movimiento => editar
 function onTxActivate(e) {
@@ -324,13 +352,15 @@ document.addEventListener('click', onTxActivate);
 document.addEventListener('keydown', onTxActivate);
 
 // ===== Navegación =====
-const TITLES = { resumen: 'Resumen', movimientos: 'Movimientos', presupuestos: 'Presupuestos', ajustes: 'Ajustes' };
+const TITLES = { resumen: 'Resumen', movimientos: 'Movimientos', presupuestos: 'Presupuestos', recordatorios: 'Recordatorios', ajustes: 'Ajustes' };
 function showView(name) {
+  currentView = name;
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + name));
   document.querySelectorAll('.nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   $('#pageTitle').textContent = TITLES[name];
   $('.month-nav').style.visibility = name === 'ajustes' ? 'hidden' : '';
   $('#fab').hidden = name === 'ajustes';
+  $('#fab').setAttribute('aria-label', name === 'recordatorios' ? 'Agregar recordatorio' : 'Agregar movimiento');
   window.scrollTo({ top: 0 });
   if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
 }
@@ -406,7 +436,7 @@ function download(filename, content, mime) {
 }
 
 $('#exportBtn').addEventListener('click', () => {
-  const backup = { ...data, categories: cats(), transactions: txs() };
+  const backup = { ...data, categories: cats(), transactions: txs(), reminders: reminders() };
   download(`finanza-respaldo-${todayISO()}.json`, JSON.stringify(backup, null, 2), 'application/json');
 });
 
@@ -504,6 +534,7 @@ $('#importInput').addEventListener('change', async (e) => {
   const t = now();
   for (const x of imported.transactions) x.updatedAt = t;
   for (const c of imported.categories) c.updatedAt = t;
+  for (const r of imported.reminders) r.updatedAt = t;
   data = store.merge(data, imported);
   applyTheme();
   persist();
@@ -514,9 +545,10 @@ $('#importInput').addEventListener('change', async (e) => {
 
 $('#wipeBtn').addEventListener('click', () => {
   const where = user ? 'en TODOS tus dispositivos sincronizados' : 'de este dispositivo';
-  if (!confirm(`Esto borrará todos tus movimientos y presupuestos ${where}. ¿Seguro?`)) return;
+  if (!confirm(`Esto borrará todos tus movimientos, presupuestos y recordatorios ${where}. ¿Seguro?`)) return;
   const t = now();
   for (const x of data.transactions) if (!x.deleted) Object.assign(x, { deleted: true, updatedAt: t });
+  for (const r of data.reminders) if (!r.deleted) Object.assign(r, { deleted: true, updatedAt: t });
   for (const k of Object.keys(data.budgets)) data.budgets[k] = { amount: 0, updatedAt: t };
   persist();
   toast('Datos borrados');
@@ -585,9 +617,11 @@ async function initSync() {
       const changed = u?.id !== user?.id;
       user = u;
       setSyncState(user ? 'ok' : 'signedout');
-      if (user && changed) scheduleSync(0);
+      if (user && changed) { scheduleSync(0); ensurePush(); }
+      renderNotifyCard();
     });
-    if (user) scheduleSync(0);
+    if (user) { scheduleSync(0); ensurePush(); }
+    renderNotifyCard();
   } catch {
     // Sin internet al abrir la app: la librería no carga. Se reintenta al reconectar.
     setSyncState('offline');
@@ -622,17 +656,388 @@ $('#authForm').addEventListener('submit', async (e) => {
 $('#syncNowBtn').addEventListener('click', () => runSync());
 $('#signOutBtn').addEventListener('click', async () => {
   if (!confirm('¿Cerrar sesión? Tus datos se quedan en este dispositivo, pero dejarán de sincronizarse.')) return;
+  const endpoint = notify.pushEndpoint();
+  if (endpoint) {
+    try { await sync.deletePushSubscription(endpoint); } catch {}
+    await notify.unsubscribePush();
+  }
   await sync.signOut();
   user = null;
   setSyncState('signedout');
+  renderNotifyCard();
 });
 
 window.addEventListener('online', () => scheduleSync(0));
 window.addEventListener('offline', () => user && setSyncState('offline'));
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') scheduleSync(0);
+  if (document.visibilityState !== 'visible') return;
+  scheduleSync(0);
+  if (renderedDay !== todayISO()) render();
+  checkLocalAlerts();
 });
-setInterval(() => document.visibilityState === 'visible' && scheduleSync(0), 60_000);
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  scheduleSync(0);
+  // Si pasó la medianoche con la app abierta, se actualizan los "faltan X días".
+  if (renderedDay !== todayISO()) { render(); checkLocalAlerts(); }
+}, 60_000);
+setInterval(checkLocalAlerts, 30 * 60_000);
+
+// ===== Recordatorios de pago (calendario) =====
+let renderedDay = null;
+let payingId = null;      // recordatorio que se está pagando desde el formulario de movimiento
+let dayDate = null;       // fecha abierta en el panel del día
+let editingRemId = null;
+let pushState = { ok: false, error: '' };
+const dayDialog = $('#dayDialog');
+
+const byDate = (a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+
+function remItemHTML(r, today) {
+  const c = catById(r.categoryId);
+  const st = rem.statusOf(r, today);
+  const badge = st === 'paid' ? '✓ Pagado' : rem.whenLabel(rem.daysUntil(r.date, today));
+  const sub = [rem.shortDate(r.date), r.amount ? money(r.amount) : '', r.repeat === 'monthly' ? '🔁 Cada mes' : '']
+    .filter(Boolean).join(' · ');
+  const action = r.paid
+    ? `<button type="button" class="btn sm" data-unpay="${esc(r.id)}">Deshacer</button>`
+    : `<button type="button" class="btn sm primary" data-pay="${esc(r.id)}">Pagado</button>`;
+  return `<li class="rem-item ${st}" data-rem="${esc(r.id)}" tabindex="0">
+    <span class="tx-icon" style="--tint:${tintOf(c.id)}">${esc(c.icon)}</span>
+    <span class="tx-main">
+      <span class="tx-title">${esc(r.title)}</span>
+      <span class="tx-sub">${esc(sub)}</span>
+    </span>
+    <span class="rem-side"><span class="rem-badge ${st}">${esc(badge)}</span>${action}</span>
+  </li>`;
+}
+
+function renderReminders() {
+  const today = todayISO();
+  const all = reminders();
+
+  // Qué pasa cada día del mes visible: recordatorios y días de aviso.
+  const items = new Map();
+  const alertDays = new Set();
+  for (const r of all) {
+    if (!items.has(r.date)) items.set(r.date, []);
+    items.get(r.date).push(r);
+    if (!r.paid && rem.daysUntil(r.date, today) >= 0) {
+      for (let k = 1; k <= rem.DAYS_BEFORE; k++) alertDays.add(rem.addDays(r.date, -k));
+    }
+  }
+
+  const [y, m] = currentMonth.split('-').map(Number);
+  const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7; // la semana empieza el lunes
+  const total = new Date(y, m, 0).getDate();
+  let html = '<span class="cal-blank"></span>'.repeat(offset);
+  for (let d = 1; d <= total; d++) {
+    const iso = `${currentMonth}-${String(d).padStart(2, '0')}`;
+    const list = (items.get(iso) || []).sort(byDate);
+    const states = list.map((r) => rem.statusOf(r, today));
+    const cls = ['cal-day'];
+    if (iso === today) cls.push('today');
+    if (iso < today) cls.push('past');
+    if (states.includes('overdue')) cls.push('overdue');
+    else if (states.includes('soon')) cls.push('due');
+    else if (alertDays.has(iso)) cls.push('alert');
+    const chips = list.slice(0, 3)
+      .map((r, i) => `<span class="cal-chip ${states[i]}">${esc(r.title)}</span>`).join('');
+    const more = list.length > 3 ? `<span class="cal-more">+${list.length - 3}</span>` : '';
+    const label = `${rem.longDate(iso)}${list.length ? `, ${list.length} recordatorio${list.length > 1 ? 's' : ''}` : ''}`;
+    html += `<button type="button" class="${cls.join(' ')}" data-date="${iso}" aria-label="${esc(label)}">
+      <span class="cal-num">${d}</span><span class="cal-items">${chips}${more}</span>
+    </button>`;
+  }
+  $('#calGrid').innerHTML = html;
+
+  // Lista de próximos pagos: todo lo pendiente, lo vencido primero.
+  const pending = all.filter((r) => !r.paid).sort(byDate);
+  $('#upcomingList').innerHTML = pending.length
+    ? pending.slice(0, 12).map((r) => remItemHTML(r, today)).join('')
+    : '<li class="empty"><span class="empty-ico">🗓️</span>No tienes pagos pendientes.<br>Toca un día del calendario para crear uno.</li>';
+
+  // Tarjeta en Resumen: lo que vence en los próximos días o ya venció.
+  const due = pending.filter((r) => rem.daysUntil(r.date, today) <= rem.DAYS_BEFORE);
+  $('#dueCard').hidden = !due.length;
+  $('#dueList').innerHTML = due.map((r) => remItemHTML(r, today)).join('');
+
+  if (dayDialog.open) renderDayList();
+  renderNotifyCard();
+}
+
+// ---- Panel del día ----
+function openDay(date, editId = null) {
+  dayDate = date;
+  $('#dayTitle').textContent = rem.longDate(date);
+  renderDayList();
+  resetRemForm(editId ? remById(editId) : null);
+  if (!dayDialog.open) dayDialog.showModal();
+  if (!editId) setTimeout(() => $('#remTitle').focus(), 50);
+}
+
+function renderDayList() {
+  const list = reminders().filter((r) => r.date === dayDate).sort(byDate);
+  $('#dayList').innerHTML = list.map((r) => remItemHTML(r, todayISO())).join('');
+  $('#dayList').hidden = !list.length;
+}
+
+function resetRemForm(r = null) {
+  editingRemId = r?.id ?? null;
+  const opts = cats().filter((c) => c.type === 'expense');
+  if (r?.categoryId && !opts.some((c) => c.id === r.categoryId)) opts.push(catById(r.categoryId));
+  $('#remCategory').innerHTML = opts
+    .map((c) => `<option value="${esc(c.id)}" ${c.id === r?.categoryId ? 'selected' : ''}>${esc(c.icon)} ${esc(c.name)}</option>`)
+    .join('');
+  if (!r) $('#remCategory').value = opts.find((c) => c.id === 'c-servicios')?.id ?? opts[0]?.id ?? '';
+  $('#remTitle').value = r?.title ?? '';
+  $('#remAmount').value = r?.amount ? String(r.amount) : '';
+  $('#remDate').value = r?.date ?? dayDate;
+  $('#remRepeat').value = r?.repeat ?? 'none';
+  $('#remNote').value = r?.note ?? '';
+  $('#remFormTitle').textContent = r ? 'Editar recordatorio' : 'Nuevo recordatorio';
+  $('#remSubmit').textContent = r ? 'Guardar cambios' : 'Guardar';
+  $('#remDelete').hidden = !r;
+  $('#remNew').hidden = !r;
+  updateRemHint();
+}
+
+function updateRemHint() {
+  const date = $('#remDate').value;
+  if (!date) { $('#remHint').textContent = ''; return; }
+  const from = rem.addDays(date, -rem.DAYS_BEFORE);
+  const fmt = (iso) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+    .format(new Date(`${iso}T00:00:00Z`));
+  $('#remHint').textContent = `🔔 Te avisaremos una vez al día del ${fmt(from)} al ${fmt(date)} (4 avisos), hasta que lo marques como pagado.`;
+}
+$('#remDate').addEventListener('input', updateRemHint);
+
+$('#remForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const title = $('#remTitle').value.trim();
+  const date = $('#remDate').value;
+  if (!title || !date) return;
+  const amountText = $('#remAmount').value.trim();
+  const amount = amountText ? parseAmount(amountText) : 0;
+  if (amountText && !(amount > 0 && Number.isFinite(amount))) {
+    toast('Escribe un monto válido o déjalo vacío');
+    $('#remAmount').focus();
+    return;
+  }
+  const fields = {
+    title, amount, date,
+    categoryId: $('#remCategory').value,
+    repeat: $('#remRepeat').value === 'monthly' ? 'monthly' : 'none',
+    anchorDay: Number(date.slice(8)),
+    note: $('#remNote').value.trim(),
+    updatedAt: now(),
+  };
+  const existing = editingRemId && remById(editingRemId);
+  if (existing) {
+    Object.assign(existing, fields);
+    toast('Recordatorio actualizado');
+  } else {
+    data.reminders.push({
+      id: store.uid(), paid: false, paidAt: 0, txId: '', nextId: '', createdAt: now(), deleted: false, ...fields,
+    });
+    toast('Recordatorio guardado');
+  }
+  if (date !== dayDate) {
+    dayDate = date;
+    $('#dayTitle').textContent = rem.longDate(date);
+    currentMonth = monthKeyOf(date);
+  }
+  persist();
+  resetRemForm();
+  // Buen momento para pedir permiso: la persona acaba de crear algo que necesita avisos.
+  if (notify.permission() === 'default') enableNotifications();
+});
+
+$('#remDelete').addEventListener('click', () => {
+  const r = editingRemId && remById(editingRemId);
+  if (!r || !confirm(`¿Eliminar el recordatorio "${r.title}"?`)) return;
+  Object.assign(r, { deleted: true, updatedAt: now() });
+  toast('Recordatorio eliminado');
+  persist();
+  resetRemForm();
+});
+$('#remNew').addEventListener('click', () => { resetRemForm(); $('#remTitle').focus(); });
+$('#dayClose').addEventListener('click', () => dayDialog.close());
+
+// ---- Pagar ----
+/** Marca como pagado y, si se repite cada mes, crea el del mes siguiente. No guarda: quien llama hace persist(). */
+function markPaid(id, txId) {
+  const r = remById(id);
+  if (!r) return;
+  const t = now();
+  Object.assign(r, { paid: true, paidAt: t, txId, updatedAt: t });
+  if (r.repeat === 'monthly' && !r.nextId) {
+    const next = {
+      ...r, id: store.uid(), date: rem.nextMonthly(r.date, r.anchorDay),
+      paid: false, paidAt: 0, txId: '', nextId: '', createdAt: t, updatedAt: t,
+    };
+    data.reminders.push(next);
+    r.nextId = next.id;
+  }
+}
+
+// Al tocar "Pagado" se abre el formulario de gasto ya lleno para que actualices tus cuentas.
+function startPayment(id) {
+  const r = remById(id);
+  if (!r) return;
+  if (dayDialog.open) dayDialog.close();
+  openTxDialog(null, { type: 'expense', amount: r.amount, categoryId: r.categoryId, date: todayISO(), note: r.title });
+  payingId = r.id;
+  $('#txDialogTitle').textContent = 'Registrar el pago';
+  $('#txPayHint').textContent = `Vas a marcar "${r.title}" como pagado. Revisa el monto y la fecha para registrarlo en tus gastos.`;
+  $('#txPayHint').hidden = false;
+  $('#txSkip').hidden = false;
+}
+
+function undoPayment(id) {
+  const r = remById(id);
+  if (!r) return;
+  const t = now();
+  const tx = r.txId && txs().find((x) => x.id === r.txId);
+  if (tx && confirm(`¿Eliminar también el gasto de ${money(tx.amount)} que se registró con este pago?`)) {
+    Object.assign(tx, { deleted: true, updatedAt: t });
+  }
+  // Si ya se había creado el del mes siguiente y sigue pendiente, se quita.
+  const next = r.nextId && remById(r.nextId);
+  if (next && !next.paid) Object.assign(next, { deleted: true, updatedAt: t });
+  Object.assign(r, { paid: false, paidAt: 0, txId: '', nextId: '', updatedAt: t });
+  toast('Pago desmarcado');
+  persist();
+}
+
+document.addEventListener('click', (e) => {
+  const pay = e.target.closest('[data-pay]');
+  if (pay) { startPayment(pay.dataset.pay); return; }
+  const unpay = e.target.closest('[data-unpay]');
+  if (unpay) { undoPayment(unpay.dataset.unpay); return; }
+  const item = e.target.closest('.rem-item');
+  if (item) {
+    const r = remById(item.dataset.rem);
+    if (r) openDay(r.date, r.id);
+    return;
+  }
+  const day = e.target.closest('.cal-day');
+  if (day) openDay(day.dataset.date);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !e.target.matches?.('.rem-item')) return;
+  const r = remById(e.target.dataset.rem);
+  if (r) openDay(r.date, r.id);
+});
+
+// ---- Notificaciones ----
+function renderNotifyCard() {
+  const p = notify.permission();
+  let state = 'off', label = 'Desactivadas', text;
+  if (p === 'unsupported') {
+    label = 'No disponible';
+    text = notify.isIOS() && !notify.isStandalone()
+      ? 'En iPhone o iPad, primero instala la app (Compartir → Agregar a pantalla de inicio) y ábrela desde el ícono para poder activar los avisos.'
+      : 'Este navegador no permite notificaciones. Verás los pagos próximos dentro de la app.';
+  } else if (p === 'denied') {
+    state = 'error'; label = 'Bloqueadas';
+    text = 'Bloqueaste las notificaciones para esta app. Actívalas en la configuración del navegador (ícono 🔒 junto a la dirección) o del celular.';
+  } else if (p === 'default') {
+    text = 'Activa las notificaciones para recibir un aviso cada día desde 3 días antes de cada pago hasta el día en que vence.';
+  } else if (notify.pushEndpoint() && !pushState.error) {
+    // Este dispositivo ya quedó registrado en el servidor (se confirma de nuevo al iniciar sesión).
+    state = 'ok'; label = 'Activadas';
+    text = `Te llegarán en este dispositivo cada día a las ${notify.SEND_HOUR}:00 a. m., aunque la app esté cerrada.`;
+  } else {
+    state = 'offline'; label = 'Solo con la app abierta';
+    text = !notify.pushConfigured()
+      ? 'Activadas, pero por ahora solo llegan cuando abres la app. Para recibirlas con la app cerrada, sigue la guía docs/NOTIFICACIONES.md.'
+      : !user
+        ? 'Activadas, pero solo llegan cuando abres la app. Inicia sesión en Ajustes → Sincronización para recibirlas con la app cerrada.'
+        : pushState.error
+          ? `Solo llegan cuando abres la app. No se pudo activar el envío desde el servidor: ${pushState.error}`
+          : 'Conectando con el servidor de avisos…';
+  }
+  const badge = $('#notifyBadge');
+  badge.dataset.state = state;
+  badge.textContent = label;
+  $('#notifyText').textContent = text;
+  $('#notifyEnableBtn').hidden = p !== 'default';
+  $('#notifyTestBtn').hidden = p !== 'granted';
+}
+
+async function enableNotifications() {
+  const p = await notify.requestPermission();
+  if (p === 'granted') {
+    toast('🔔 Notificaciones activadas');
+    await ensurePush();
+    checkLocalAlerts();
+  } else if (p === 'denied') toast('Notificaciones bloqueadas');
+  renderNotifyCard();
+}
+
+/** Registra este dispositivo en el servidor para recibir avisos con la app cerrada. */
+async function ensurePush() {
+  if (!user || !notify.pushConfigured() || notify.permission() !== 'granted') return;
+  if (!notify.pushSupported()) {
+    pushState = { ok: false, error: 'este navegador no admite avisos con la app cerrada.' };
+    renderNotifyCard();
+    return;
+  }
+  try {
+    const sub = await notify.subscribePush();
+    await sync.savePushSubscription(user.id, sub, Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    notify.rememberPush(sub.endpoint);
+    pushState = { ok: true, error: '' };
+  } catch (err) {
+    notify.rememberPush(null);
+    pushState = { ok: false, error: err.message || String(err) };
+  }
+  renderNotifyCard();
+}
+
+/** Muestra los avisos de hoy que aún no se han mostrado en este dispositivo. */
+let checking = false;
+async function checkLocalAlerts() {
+  if (checking || notify.permission() !== 'granted') return;
+  // Si el servidor envía los avisos a este dispositivo, se le da prioridad hasta una hora
+  // después de la hora de envío, para no duplicarlos.
+  if (notify.pushEndpoint() && new Date().getHours() <= notify.SEND_HOUR) return;
+  checking = true;
+  try {
+    const today = todayISO();
+    await notify.pruneLog((d) => rem.daysUntil(d, today) < -7);
+    for (const r of reminders().filter((x) => rem.isAlertDay(x, today))) {
+      const tag = rem.alertTag(r, today);
+      if (await notify.wasShown(tag)) continue;
+      const { title, body } = rem.alertText(r, rem.daysUntil(r.date, today), r.amount ? money(r.amount) : '');
+      await notify.show(title, { body, tag, data: { url: './#recordatorios' } });
+      await notify.markShown(tag);
+    }
+  } catch {
+    // Si el sistema no deja mostrar la notificación, la tarjeta de "Pagos próximos" sigue visible.
+  } finally {
+    checking = false;
+  }
+}
+
+$('#notifyEnableBtn').addEventListener('click', enableNotifications);
+$('#notifyTestBtn').addEventListener('click', async () => {
+  try {
+    await notify.show('🔔 Prueba de Finanza', { body: 'Así se verán los avisos de tus pagos.', tag: 'finanza-test' });
+  } catch (err) {
+    toast('No se pudo mostrar: ' + (err.message || err));
+  }
+});
+
+// Al tocar una notificación, el service worker pide abrir el calendario.
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.type === 'open-view' && TITLES[e.data.view]) showView(e.data.view);
+});
+window.addEventListener('hashchange', () => {
+  const v = location.hash.slice(1);
+  if (TITLES[v] && v !== currentView) showView(v);
+});
 
 // ===== Instalación como app (PWA) =====
 let installEvent = null;
@@ -660,3 +1065,4 @@ render();
 const initial = location.hash.slice(1);
 if (TITLES[initial]) showView(initial);
 initSync();
+checkLocalAlerts();

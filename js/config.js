@@ -12,3 +12,11 @@
 
 export const SUPABASE_URL = 'https://ogmlanpqzfnwewmryyub.supabase.co';      // ej: 'https://abcdefghijk.supabase.co'
 export const SUPABASE_ANON_KEY = 'sb_publishable_1LX4T9Zmpmxx3-1t-Y_5Nw_NIhUQHOo'; // ej: 'eyJhbGciOi...' o 'sb_publishable_...'
+
+// ============================================================
+//  Notificaciones con la app cerrada (Web Push)
+//  Guía paso a paso: docs/NOTIFICACIONES.md
+// ============================================================
+// Llave PÚBLICA VAPID (la privada va solo en los secretos de Supabase).
+// Si la dejas vacía, los avisos llegan solo cuando abres la app.
+export const VAPID_PUBLIC_KEY = '';

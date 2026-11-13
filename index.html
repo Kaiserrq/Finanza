@@ -30,6 +30,7 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g></symbol>
     <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></g></symbol>
     <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </svg>
 
@@ -43,6 +44,7 @@
       <button data-view="resumen" class="active"><svg><use href="#i-home"/></svg><span>Resumen</span></button>
       <button data-view="movimientos"><svg><use href="#i-list"/></svg><span>Movimientos</span></button>
       <button data-view="presupuestos"><svg><use href="#i-target"/></svg><span>Presupuestos</span></button>
+      <button data-view="recordatorios"><svg><use href="#i-cal"/></svg><span>Calendario</span></button>
       <button data-view="ajustes"><svg><use href="#i-gear"/></svg><span>Ajustes</span></button>
     </nav>
 
@@ -62,6 +64,14 @@
       <main>
         <!-- RESUMEN -->
         <section id="view-resumen" class="view active" aria-label="Resumen">
+          <div class="card due-card" id="dueCard" hidden>
+            <div class="card-head">
+              <h2>🔔 Pagos próximos</h2>
+              <button class="link-btn" data-goto="recordatorios">Ver calendario →</button>
+            </div>
+            <ul id="dueList" class="rem-list"></ul>
+          </div>
+
           <div class="hero-card">
             <div class="hero-top">
               <span>Saldo total</span>
@@ -148,6 +158,41 @@
           </div>
           <div class="card">
             <div id="budgetList" class="budget-list"></div>
+          </div>
+        </section>
+
+        <!-- RECORDATORIOS -->
+        <section id="view-recordatorios" class="view" aria-label="Recordatorios">
+          <div class="card cal-card">
+            <div class="cal-week" aria-hidden="true">
+              <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+            </div>
+            <div id="calGrid" class="cal-grid"></div>
+            <div class="cal-legend" aria-hidden="true">
+              <span><i class="dot later"></i>Pendiente</span>
+              <span><i class="dot soon"></i>Avisando (3 días antes)</span>
+              <span><i class="dot overdue"></i>Vencido</span>
+              <span><i class="dot paid"></i>Pagado</span>
+            </div>
+            <p class="hint cal-tip">Toca un día para agregar un recordatorio de pago.</p>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h2>Próximos pagos</h2>
+              <ul id="upcomingList" class="rem-list"></ul>
+            </div>
+            <div class="card" id="notifyCard">
+              <div class="card-head">
+                <h2>📲 Notificaciones</h2>
+                <span id="notifyBadge" class="sync-badge" data-state="off"></span>
+              </div>
+              <p id="notifyText" class="muted"></p>
+              <div class="btn-row">
+                <button id="notifyEnableBtn" class="btn primary" hidden>Activar notificaciones</button>
+                <button id="notifyTestBtn" class="btn" hidden>Enviar aviso de prueba</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -289,6 +334,7 @@
     <form id="txForm">
       <div class="sheet-handle" aria-hidden="true"></div>
       <h2 id="txDialogTitle">Nuevo movimiento</h2>
+      <p id="txPayHint" class="pay-hint" hidden></p>
       <div class="segmented" role="radiogroup" aria-label="Tipo">
         <label><input type="radio" name="type" value="expense" checked><span>Gasto</span></label>
         <label><input type="radio" name="type" value="income"><span>Ingreso</span></label>
@@ -314,9 +360,59 @@
       </label>
       <div class="dialog-actions">
         <button type="button" id="txDelete" class="btn danger" hidden>Eliminar</button>
+        <button type="button" id="txSkip" class="btn" hidden>Solo marcar pagado</button>
         <span class="spacer"></span>
         <button type="button" id="txCancel" class="btn">Cancelar</button>
         <button type="submit" class="btn primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Panel del día: recordatorios de una fecha -->
+  <dialog id="dayDialog">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <h2 id="dayTitle"></h2>
+    <ul id="dayList" class="rem-list day-list"></ul>
+    <form id="remForm">
+      <h3 id="remFormTitle">Nuevo recordatorio</h3>
+      <label class="field">
+        <span>¿Qué hay que pagar?</span>
+        <input id="remTitle" maxlength="60" required placeholder="Ej: Arriendo, Internet, Tarjeta" autocomplete="off">
+      </label>
+      <div class="grid-2 tight">
+        <label class="field">
+          <span>Monto (opcional)</span>
+          <input id="remAmount" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Categoría</span>
+          <select id="remCategory"></select>
+        </label>
+      </div>
+      <div class="grid-2 tight">
+        <label class="field">
+          <span>Fecha de pago</span>
+          <input id="remDate" type="date" required>
+        </label>
+        <label class="field">
+          <span>Repetir</span>
+          <select id="remRepeat">
+            <option value="none">No repetir</option>
+            <option value="monthly">Cada mes</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">
+        <span>Nota (opcional)</span>
+        <input id="remNote" maxlength="120" placeholder="Ej: referencia de pago, cuenta…">
+      </label>
+      <p id="remHint" class="pay-hint"></p>
+      <div class="dialog-actions">
+        <button type="button" id="remDelete" class="btn danger" hidden>Eliminar</button>
+        <button type="button" id="remNew" class="btn" hidden>Nuevo</button>
+        <span class="spacer"></span>
+        <button type="button" id="dayClose" class="btn">Cerrar</button>
+        <button type="submit" class="btn primary" id="remSubmit">Guardar</button>
       </div>
     </form>
   </dialog>

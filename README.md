@@ -10,6 +10,7 @@ Es una **PWA** (Progressive Web App): el mismo código funciona como **página w
 - Resumen del mes: ingresos, gastos, balance y saldo total
 - Gráfico de gastos por categoría y tendencia de los últimos 6 meses
 - Presupuestos mensuales por categoría con alertas
+- **Calendario de pagos con recordatorios**: avisa cada día desde 3 días antes del pago hasta el día en que vence; al marcar *Pagado* te pide registrar el gasto. Se puede repetir cada mes. Avisos con la app cerrada → [docs/NOTIFICACIONES.md](docs/NOTIFICACIONES.md)
 - Categorías personalizables, varias monedas, tema claro/oscuro
 - **Sincronización opcional** entre celular y PC con Supabase → [docs/SINCRONIZACION.md](docs/SINCRONIZACION.md)
 - **Importar desde Excel (CSV)** con validación fila por fila → [docs/IMPORTAR.md](docs/IMPORTAR.md)
@@ -52,13 +53,17 @@ Cuando publiques cambios, sube el número de `CACHE_VERSION` en `sw.js` para que
 index.html            Estructura de la app
 css/styles.css        Estilos (claro/oscuro, móvil primero)
 js/app.js             Lógica y pantallas
+js/reminders.js       Fechas y textos de los recordatorios de pago
+js/notify.js          Notificaciones (locales y push)
 js/storage.js         Guardado local y combinación de datos entre dispositivos
 js/sync.js            Conexión con Supabase (cuenta y nube)
 js/config.js          ⚙️ Aquí van tus claves de Supabase
 js/csv.js             Importación desde Excel/CSV
 js/ui.js              Formato de moneda, fechas, tooltips
 supabase/schema.sql   Tabla y reglas de seguridad para Supabase
-docs/                 Manuales (sincronización e importación)
+supabase/notificaciones.sql      Tabla de dispositivos y tarea programada de avisos
+supabase/functions/send-reminders  Función que envía los avisos de pago
+docs/                 Manuales (sincronización, importación y notificaciones)
 manifest.webmanifest  Hace que sea instalable
 sw.js                 Funcionamiento sin conexión
 icons/                Íconos de la app
