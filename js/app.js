@@ -842,13 +842,9 @@ $('#remForm').addEventListener('submit', (e) => {
     });
     toast('Recordatorio guardado');
   }
-  if (date !== dayDate) {
-    dayDate = date;
-    $('#dayTitle').textContent = rem.longDate(date);
-    currentMonth = monthKeyOf(date);
-  }
+  currentMonth = monthKeyOf(date);
+  dayDialog.close();
   persist();
-  resetRemForm();
   // Buen momento para pedir permiso: la persona acaba de crear algo que necesita avisos.
   if (notify.permission() === 'default') enableNotifications();
   // Si vence en los próximos 3 días, el aviso de hoy se muestra ya (el servidor solo envía a las 9:00).
@@ -860,8 +856,8 @@ $('#remDelete').addEventListener('click', () => {
   if (!r || !confirm(`¿Eliminar el recordatorio "${r.title}"?`)) return;
   Object.assign(r, { deleted: true, updatedAt: now() });
   toast('Recordatorio eliminado');
+  dayDialog.close();
   persist();
-  resetRemForm();
 });
 $('#remNew').addEventListener('click', () => { resetRemForm(); $('#remTitle').focus(); });
 $('#dayClose').addEventListener('click', () => dayDialog.close());
@@ -1024,9 +1020,17 @@ async function checkLocalAlerts({ force = false } = {}) {
 }
 
 $('#notifyEnableBtn').addEventListener('click', enableNotifications);
+// La prueba es lo único que se puede enviar varias veces: cada una lleva una etiqueta distinta,
+// así el sistema la muestra siempre (los avisos reales usan una etiqueta por día y no se repiten).
+let testCount = 0;
 $('#notifyTestBtn').addEventListener('click', async () => {
+  const today = todayISO();
+  const next = reminders().filter((r) => !r.paid && rem.daysUntil(r.date, today) >= 0).sort(byDate)[0];
+  const sample = next
+    ? rem.alertText(next, rem.daysUntil(next.date, today), next.amount ? money(next.amount) : '')
+    : { title: '🔔 Prueba de Finanza', body: 'Así se verán los avisos de tus pagos.' };
   try {
-    await notify.show('🔔 Prueba de Finanza', { body: 'Así se verán los avisos de tus pagos.', tag: 'finanza-test' });
+    await notify.show(`(Prueba) ${sample.title}`, { body: sample.body, tag: `finanza-test-${Date.now()}-${++testCount}` });
   } catch (err) {
     toast('No se pudo mostrar: ' + (err.message || err));
   }
