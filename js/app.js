@@ -1029,10 +1029,29 @@ $('#notifyTestBtn').addEventListener('click', async () => {
   const sample = next
     ? rem.alertText(next, rem.daysUntil(next.date, today), next.amount ? money(next.amount) : '')
     : { title: '🔔 Prueba de Finanza', body: 'Así se verán los avisos de tus pagos.' };
+  const title = `(Prueba) ${sample.title}`;
+  const showHere = () => notify.show(title, { body: sample.body, tag: `finanza-test-${Date.now()}-${++testCount}` });
+  const btn = $('#notifyTestBtn');
+  btn.disabled = true;
   try {
-    await notify.show(`(Prueba) ${sample.title}`, { body: sample.body, tag: `finanza-test-${Date.now()}-${++testCount}` });
+    if (user && notify.pushConfigured()) {
+      // Con sesión: el servidor la envía a TODOS los dispositivos de la cuenta (incluido este).
+      try {
+        const r = await sync.sendTestPush(title, sample.body);
+        if (!notify.pushEndpoint()) await showHere(); // este dispositivo no está registrado: se muestra aquí
+        toast(`Prueba enviada a ${r.enviados} de ${r.dispositivos} dispositivo${r.dispositivos === 1 ? '' : 's'}`);
+      } catch (err) {
+        await showHere();
+        toast('Solo se mostró aquí. El servidor respondió: ' + err.message);
+      }
+    } else {
+      await showHere();
+      toast('Prueba mostrada solo en este dispositivo (inicia sesión para enviarla a todos)');
+    }
   } catch (err) {
     toast('No se pudo mostrar: ' + (err.message || err));
+  } finally {
+    btn.disabled = false;
   }
 });
 

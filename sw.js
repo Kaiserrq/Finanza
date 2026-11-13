@@ -1,6 +1,6 @@
 // Service worker: guarda la app en caché para que funcione sin internet.
 // Cambia CACHE_VERSION cada vez que publiques cambios para forzar la actualización.
-const CACHE_VERSION = 'finanza-v8';
+const CACHE_VERSION = 'finanza-v9';
 // Registro de avisos ya mostrados (lo comparte con la app; no se borra al actualizar).
 const LOG_CACHE = 'finanza-notified';
 const ASSETS = [
@@ -72,9 +72,11 @@ self.addEventListener('push', (event) => {
       badge: 'icons/icon-192.png',
       data: { url: p.url || './#recordatorios' },
     });
-    // Se anota para que la app no muestre el mismo aviso otra vez hoy.
-    const log = await caches.open(LOG_CACHE);
-    await log.put(new URL('__notified/' + tag, self.registration.scope).href, new Response('1'));
+    // Se anota para que la app no muestre el mismo aviso otra vez hoy (las pruebas no se anotan).
+    if (tag.startsWith('rem-')) {
+      const log = await caches.open(LOG_CACHE);
+      await log.put(new URL('__notified/' + tag, self.registration.scope).href, new Response('1'));
+    }
   })());
 });
 

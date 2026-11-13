@@ -107,6 +107,21 @@ export async function savePushSubscription(userId, sub, timezone) {
   }
 }
 
+/**
+ * Pide al servidor una notificación de prueba para TODOS los dispositivos de tu cuenta.
+ * Devuelve { dispositivos, enviados, ... }.
+ */
+export async function sendTestPush(title, body) {
+  const c = await getClient();
+  const { data, error } = await c.functions.invoke('send-reminders', { body: { modo: 'prueba', title, body } });
+  if (error) {
+    let msg = error.message;
+    try { msg = (await error.context?.json())?.error || msg; } catch {}
+    throw new Error(friendly(msg));
+  }
+  return data;
+}
+
 export async function deletePushSubscription(endpoint) {
   const c = await getClient();
   await c?.from(PUSH_TABLE).delete().eq('endpoint', endpoint);

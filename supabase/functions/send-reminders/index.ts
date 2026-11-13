@@ -9,6 +9,11 @@
 //  Parámetros opcionales (para probar):
 //    ?modo=ahora   envía los avisos de hoy sin esperar a las 9:00
 //    ?modo=prueba  envía una notificación de prueba a todos los dispositivos
+//
+//  Quién puede llamarla:
+//    - pg_cron (o tú desde el SQL Editor) con el encabezado x-cron-secret.
+//    - La app, con la sesión del usuario, SOLO para enviar una prueba a los
+//      dispositivos de esa misma cuenta (botón "Enviar aviso de prueba").
 // =============================================================
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -80,26 +85,47 @@ function message(r: Reminder, days: number, currency: string) {
 const chunk = <T>(list: T[], size: number) =>
   Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
 
+// La app llama a la función desde el navegador (otro dominio): hace falta CORS.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+
+const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
-    // Solo pg_cron (o tú, para probar) conoce este secreto.
-    if (req.headers.get('x-cron-secret') !== env('CRON_SECRET')) return json({ error: 'No autorizado' }, 401);
-    const mode = new URL(req.url).searchParams.get('modo');
+    let input: Record<string, unknown> = {};
+    try { input = await req.json(); } catch { /* sin cuerpo */ }
+    const mode = new URL(req.url).searchParams.get('modo') ?? clip(input.modo, 20);
 
-    webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
     const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
 
-    // 1. Todos los dispositivos registrados (por páginas).
+    // pg_cron (o tú, para probar) usa el secreto. La app usa la sesión del usuario y solo puede
+    // enviar una prueba a SUS propios dispositivos.
+    let onlyUser: string | null = null;
+    if (req.headers.get('x-cron-secret') !== env('CRON_SECRET')) {
+      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+      if (token) {
+        const { data } = await db.auth.getUser(token);
+        onlyUser = data.user?.id ?? null;
+      }
+      if (!onlyUser || mode !== 'prueba') return json({ error: 'No autorizado' }, 401);
+    }
+
+    webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
+
+    // 1. Los dispositivos registrados (por páginas).
     const subs: Sub[] = [];
     for (let from = 0; ; from += PAGE) {
-      const { data, error } = await db
-        .from('push_subscriptions')
-        .select('endpoint,user_id,p256dh,auth,timezone')
-        .order('endpoint')
-        .range(from, from + PAGE - 1);
+      let query = db.from('push_subscriptions').select('endpoint,user_id,p256dh,auth,timezone');
+      if (onlyUser) query = query.eq('user_id', onlyUser);
+      const { data, error } = await query.order('endpoint').range(from, from + PAGE - 1);
       if (error) throw error;
       subs.push(...(data as Sub[]));
       if (!data || data.length < PAGE) break;
@@ -108,7 +134,13 @@ Deno.serve(async (req) => {
     // 2. Qué enviar a cada dispositivo.
     const jobs: { sub: Sub; payload: string }[] = [];
     if (mode === 'prueba') {
-      const payload = JSON.stringify({ title: '🔔 Prueba de Finanza', body: 'Las notificaciones desde el servidor funcionan.', tag: 'finanza-test' });
+      // Etiqueta distinta en cada prueba: si se repitiera, el celular la reemplazaría sin sonar.
+      const payload = JSON.stringify({
+        title: clip(input.title, 120) || '🔔 Prueba de Finanza',
+        body: clip(input.body, 300) || 'Las notificaciones desde el servidor funcionan.',
+        tag: `finanza-test-${Date.now()}`,
+        url: './#recordatorios',
+      });
       for (const sub of subs) jobs.push({ sub, payload });
     } else {
       const targets = subs
