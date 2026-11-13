@@ -3,15 +3,15 @@
 // Hay dos formas de que llegue un aviso:
 //  1. Local: al abrir la app (o mientras está abierta) se muestran los avisos del día.
 //     Funciona sin configurar nada, pero solo si abres la app.
-//  2. Push: un servidor (función de Supabase) los envía cada día a las 9:00,
-//     aunque la app esté cerrada. Requiere docs/NOTIFICACIONES.md.
+//  2. Push: un servidor (función de Supabase) los envía cada día a la hora elegida
+//     (9:00 a. m. por defecto), aunque la app esté cerrada. Requiere docs/NOTIFICACIONES.md.
 //
 // Los avisos ya mostrados se anotan en Cache Storage, que comparten la página y el
 // service worker, para no repetir el mismo aviso dos veces el mismo día.
 import { VAPID_PUBLIC_KEY } from './config.js';
 
-/** Hora local a la que el servidor envía los avisos (igual que en la función de Supabase). */
-export const SEND_HOUR = 9;
+/** 9 → "9:00 a. m.", 13 → "1:00 p. m.", 0 → "12:00 a. m." */
+export const hourLabel = (h) => `${h % 12 || 12}:00 ${h < 12 ? 'a. m.' : 'p. m.'}`;
 
 const LOG_CACHE = 'finanza-notified';
 const PUSH_KEY = 'finanza:push-endpoint';

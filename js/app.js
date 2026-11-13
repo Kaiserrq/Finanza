@@ -22,6 +22,7 @@ const cats = () => store.alive(data.categories);
 const budgetOf = (id) => data.budgets[id]?.amount || 0;
 const reminders = () => store.alive(data.reminders);
 const remById = (id) => reminders().find((r) => r.id === id);
+const notifyHour = () => data.notify.hour;
 
 const catById = (id) =>
   data.categories.find((c) => c.id === id) || { id, name: 'Sin categoría', icon: '🏷️', type: 'expense' };
@@ -898,7 +899,7 @@ function updateRemHint() {
   const from = rem.addDays(date, -rem.DAYS_BEFORE);
   const fmt = (iso) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', timeZone: 'UTC' })
     .format(new Date(`${iso}T00:00:00Z`));
-  $('#remHint').textContent = `🔔 Te avisaremos una vez al día del ${fmt(from)} al ${fmt(date)} (4 avisos), hasta que lo marques como pagado.`;
+  $('#remHint').textContent = `🔔 Te avisaremos una vez al día, a las ${notify.hourLabel(notifyHour())}, del ${fmt(from)} al ${fmt(date)} (4 avisos), hasta que lo marques como pagado.`;
 }
 $('#remDate').addEventListener('input', updateRemHint);
 
@@ -937,7 +938,7 @@ $('#remForm').addEventListener('submit', (e) => {
   persist();
   // Buen momento para pedir permiso: la persona acaba de crear algo que necesita avisos.
   if (notify.permission() === 'default') enableNotifications();
-  // Si vence en los próximos 3 días, el aviso de hoy se muestra ya (el servidor solo envía a las 9:00).
+  // Si vence en los próximos 3 días, el aviso de hoy se muestra ya (el servidor solo envía a la hora elegida).
   else checkLocalAlerts({ force: true });
 });
 
@@ -1035,7 +1036,7 @@ function renderNotifyCard() {
   } else if (notify.pushEndpoint() && !pushState.error) {
     // Este dispositivo ya quedó registrado en el servidor (se confirma de nuevo al iniciar sesión).
     state = 'ok'; label = 'Activadas';
-    text = `Te llegarán en este dispositivo cada día a las ${notify.SEND_HOUR}:00 a. m., aunque la app esté cerrada.`;
+    text = `Te llegarán en este dispositivo cada día a las ${notify.hourLabel(notifyHour())}, aunque la app esté cerrada.`;
   } else {
     state = 'offline'; label = 'Solo con la app abierta';
     text = !notify.pushConfigured()
@@ -1050,6 +1051,10 @@ function renderNotifyCard() {
   badge.dataset.state = state;
   badge.textContent = label;
   $('#notifyText').textContent = text;
+  // La hora es de la cuenta (no del dispositivo): se puede elegir aunque aquí no haya permiso.
+  // No se toca mientras el selector está abierto/enfocado, para no cambiarlo en las manos.
+  const hourSel = $('#notifyHourSelect');
+  if (document.activeElement !== hourSel) hourSel.value = String(notifyHour());
   $('#notifyEnableBtn').hidden = p !== 'default';
   $('#notifyTestBtn').hidden = p !== 'granted';
 }
@@ -1063,6 +1068,22 @@ async function enableNotifications() {
   } else if (p === 'denied') toast('Notificaciones bloqueadas');
   renderNotifyCard();
 }
+
+// Hora de los avisos: se guarda con tus datos y se sincroniza a todos los dispositivos de la cuenta.
+// La función de Supabase la lee de ahí cada hora.
+$('#notifyHourSelect').innerHTML = Array.from({ length: 24 }, (_, h) =>
+  `<option value="${h}">${notify.hourLabel(h)}${h === store.DEFAULT_NOTIFY_HOUR ? ' (predeterminada)' : ''}</option>`).join('');
+$('#notifyHourSelect').addEventListener('change', (e) => {
+  const hour = Number(e.target.value);
+  if (!store.validHour(hour) || hour === notifyHour()) return;
+  data.notify = { hour, updatedAt: now() };
+  persist();
+  e.target.blur();
+  const when = notify.hourLabel(hour);
+  toast(user && notify.pushConfigured()
+    ? `🔔 Los avisos llegarán a las ${when} en todos tus dispositivos`
+    : `🔔 Hora de los avisos: ${when}`);
+});
 
 /** Registra este dispositivo en el servidor para recibir avisos con la app cerrada. */
 async function ensurePush() {
@@ -1089,8 +1110,8 @@ let checking = false;
 async function checkLocalAlerts({ force = false } = {}) {
   if (checking || notify.permission() !== 'granted') return;
   // Si el servidor envía los avisos a este dispositivo, se le da prioridad hasta una hora
-  // después de la hora de envío, para no duplicarlos.
-  if (!force && notify.pushEndpoint() && new Date().getHours() <= notify.SEND_HOUR) return;
+  // después de la hora elegida, para no duplicarlos.
+  if (!force && notify.pushEndpoint() && new Date().getHours() <= notifyHour()) return;
   checking = true;
   try {
     const today = todayISO();

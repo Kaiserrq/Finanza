@@ -1,6 +1,6 @@
 # 🔔 Manual: avisos de pago con la app cerrada
 
-La sección **Calendario** te avisa de cada pago **una vez al día durante 3 días antes y el mismo día**. Ejemplo: si un pago vence el **23 de noviembre**, recibes un aviso el **20, 21, 22 y 23**, a las **9:00 a. m.** de tu hora local, hasta que lo marques como **Pagado**.
+La sección **Calendario** te avisa de cada pago **una vez al día durante 3 días antes y el mismo día**. Ejemplo: si un pago vence el **23 de noviembre**, recibes un aviso el **20, 21, 22 y 23**, a las **9:00 a. m.** de tu hora local (puedes cambiar la hora, ver abajo), hasta que lo marques como **Pagado**.
 
 ### Dos niveles
 
@@ -73,7 +73,7 @@ Supabase → **Edge Functions** → **Secrets** → agrega:
 2. Reemplaza `PEGA-AQUI-TU-CRON-SECRET` por el mismo `CRON_SECRET` del paso 4.
 3. Pégala en **SQL Editor** → **Run**.
 
-Desde ahora, la función se ejecuta al minuto 0 de cada hora y avisa a cada dispositivo cuando allí son las 9:00.
+Desde ahora, la función se ejecuta al minuto 0 de cada hora y avisa a cada dispositivo cuando allí es la hora elegida (9:00 por defecto).
 
 ## Paso 6: Conectar la app (1 min)
 
@@ -110,7 +110,7 @@ La tarjeta debe decir 🟢 **Activadas**. Para probar desde el servidor, ejecuta
 
 **¿Me llega el aviso repetido si tengo la app abierta?** → No. Cada aviso tiene una etiqueta por recordatorio y día; el teléfono y la app la comparten y no lo muestran dos veces.
 
-**¿Puedo cambiar la hora?** → Cambia `SEND_HOUR` en la función (paso 3) **y** en `js/notify.js`, y vuelve a desplegar ambos.
+**¿Puedo cambiar la hora?** → Sí: **Calendario** → tarjeta **Notificaciones** → **Hora de los avisos** (por ejemplo 10:00 a. m., 1:00 p. m. o 6:00 p. m.). Se guarda con tu cuenta y se aplica a **todos** tus dispositivos; cada uno recibe el aviso a esa hora según su propia zona horaria. Solo horas en punto, porque la función se ejecuta al minuto 0 de cada hora. El día en que cambias la hora podrías recibir un aviso de más (si eliges una hora más tarde y ya te llegó el de hoy) o ninguno (si eliges una hora que ya pasó); desde el día siguiente llega solo a la nueva hora.
 
 **Mi proyecto de Supabase aparece "Paused"** → Mientras está pausado no se envían avisos. Entra al panel y pulsa **Restore project**.
 

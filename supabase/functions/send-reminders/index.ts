@@ -3,11 +3,16 @@
 //  Guía paso a paso: docs/NOTIFICACIONES.md
 //
 //  pg_cron la llama cada hora. A cada dispositivo le llega el aviso
-//  a las 9:00 de SU hora local, desde 3 días antes del pago hasta el
-//  día del pago (4 avisos), mientras no esté marcado como pagado.
+//  a la hora elegida en la app (9:00 por defecto) de SU hora local,
+//  desde 3 días antes del pago hasta el día del pago (4 avisos),
+//  mientras no esté marcado como pagado.
+//
+//  La hora se elige en la app (Calendario → Notificaciones) y se guarda
+//  con los datos de la cuenta (finanza_data → data.notify.hour), así es
+//  la misma en todos los dispositivos de esa cuenta.
 //
 //  Parámetros opcionales (para probar):
-//    ?modo=ahora   envía los avisos de hoy sin esperar a las 9:00
+//    ?modo=ahora   envía los avisos de hoy sin esperar a la hora elegida
 //    ?modo=prueba  envía una notificación de prueba a todos los dispositivos
 //
 //  Quién puede llamarla:
@@ -18,8 +23,8 @@
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
-const SEND_HOUR = 9;   // igual que SEND_HOUR en js/notify.js
-const DAYS_BEFORE = 3; // igual que DAYS_BEFORE en js/reminders.js
+const DEFAULT_HOUR = 9; // igual que DEFAULT_NOTIFY_HOUR en js/storage.js (si la cuenta no eligió otra)
+const DAYS_BEFORE = 3;  // igual que DAYS_BEFORE en js/reminders.js
 const PAGE = 1000;     // filas por consulta (límite de Supabase)
 const BATCH = 25;      // envíos en paralelo
 
@@ -52,6 +57,13 @@ const toUTC = (iso: string) => {
 };
 const daysUntil = (iso: string, today: string) => Math.round((toUTC(iso) - toUTC(today)) / 86_400_000);
 const isISO = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/** Hora de envío guardada por la app (texto "0".."23"); si falta o no es válida, la predeterminada. */
+function sendHour(v: unknown): number {
+  if (typeof v !== 'string' && typeof v !== 'number') return DEFAULT_HOUR;
+  const h = Number(v);
+  return String(v).trim() !== '' && Number.isInteger(h) && h >= 0 && h <= 23 ? h : DEFAULT_HOUR;
+}
 
 const NO_DECIMALS = new Set(['COP', 'CLP']);
 function money(n: number, currency: string): string {
@@ -143,29 +155,29 @@ Deno.serve(async (req) => {
       });
       for (const sub of subs) jobs.push({ sub, payload });
     } else {
-      const targets = subs
-        .map((sub) => ({ sub, now: localNow(sub.timezone || 'UTC') }))
-        .filter((t) => mode === 'ahora' || t.now.hour === SEND_HOUR);
-
-      // Solo se leen los recordatorios y la moneda, no todos los movimientos.
-      const byUser = new Map<string, { reminders: Reminder[]; currency: string }>();
-      for (const ids of chunk([...new Set(targets.map((t) => t.sub.user_id))], 100)) {
+      // Solo se leen la hora elegida, los recordatorios y la moneda, no todos los movimientos.
+      // (Cada cuenta puede tener una hora distinta, así que se leen todas las que tienen dispositivos.)
+      const byUser = new Map<string, { hour: number; reminders: Reminder[]; currency: string }>();
+      for (const ids of chunk([...new Set(subs.map((s) => s.user_id))], 100)) {
         const { data, error } = await db
           .from('finanza_data')
-          .select('user_id, reminders:data->reminders, currency:data->settings->>currency')
+          .select('user_id, hour:data->notify->>hour, reminders:data->reminders, currency:data->settings->>currency')
           .in('user_id', ids);
         if (error) throw error;
         for (const row of data ?? []) {
           byUser.set(row.user_id, {
+            hour: sendHour(row.hour),
             reminders: Array.isArray(row.reminders) ? row.reminders : [],
             currency: typeof row.currency === 'string' ? row.currency : 'COP',
           });
         }
       }
 
-      for (const { sub, now } of targets) {
+      for (const sub of subs) {
         const u = byUser.get(sub.user_id);
         if (!u) continue;
+        const now = localNow(sub.timezone || 'UTC');
+        if (mode !== 'ahora' && now.hour !== u.hour) continue;
         for (const r of u.reminders) {
           if (!r || r.deleted || r.paid || !r.id || !r.title || !isISO(r.date)) continue;
           const days = daysUntil(r.date, now.date);

@@ -25,6 +25,10 @@ const DEFAULT_CATEGORIES = [
 const CURRENCIES = ['COP', 'MXN', 'PEN', 'CLP', 'ARS', 'USD', 'EUR'];
 const THEMES = ['auto', 'light', 'dark'];
 
+/** Hora local (0-23) a la que llegan los avisos de pago si no se ha elegido otra. */
+export const DEFAULT_NOTIFY_HOUR = 9;
+export const validHour = (h) => Number.isInteger(h) && h >= 0 && h <= 23;
+
 export function emptyData() {
   return {
     version: 2,
@@ -33,6 +37,9 @@ export function emptyData() {
     transactions: [],
     budgets: {},
     reminders: [],
+    // Va aparte de `settings` (con su propio updatedAt): si una versión vieja de la app sube
+    // datos sin este campo, la versión nueva conserva la hora elegida en vez de volver a las 9.
+    notify: { hour: DEFAULT_NOTIFY_HOUR, updatedAt: 0 },
   };
 }
 
@@ -148,7 +155,14 @@ export function normalize(input, report = { invalid: 0 }) {
     updatedAt: +s.updatedAt || 0,
   };
 
-  return { version: 2, settings, categories, transactions, budgets, reminders };
+  // Hora de los avisos de pago (la misma en todos los dispositivos de la cuenta).
+  const n = input.notify || {};
+  const notify = {
+    hour: validHour(n.hour) ? n.hour : DEFAULT_NOTIFY_HOUR,
+    updatedAt: +n.updatedAt || 0,
+  };
+
+  return { version: 2, settings, categories, transactions, budgets, reminders, notify };
 }
 
 // Elige la versión más reciente; si empatan, una regla fija para que todos los dispositivos coincidan.
@@ -181,6 +195,7 @@ export function merge(a, b) {
     transactions: mergeById(a.transactions, b.transactions).sort(byId),
     budgets,
     reminders: mergeById(a.reminders, b.reminders).sort(byId),
+    notify: newest(a.notify, b.notify),
   };
 }
 
